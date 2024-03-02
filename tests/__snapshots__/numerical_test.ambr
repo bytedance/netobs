@@ -1,0 +1,36 @@
+# serializer version: 1
+# name: test_antithetic
+  Array([[-0.0008155, 0.0009491, -0.0002362]], dtype=float32)
+# ---
+# name: test_antithetic_zb
+  Array([[-0.0008593, 0.0003511, 0.000409]], dtype=float32)
+# ---
+# name: test_bare
+  Array([[0.0891896, -0.0699865, 0.1169906]], dtype=float32)
+# ---
+# name: test_density
+  Array([[[75.0, 815.0, 98.0],
+          [84.0, 820.0, 98.0]]], dtype=float32)
+# ---
+# name: test_energy
+  list([
+    Array(-0.5000338, dtype=float32),
+    Array(-1.0248146, dtype=float32),
+    Array(0.5247842, dtype=float32),
+  ])
+# ---
+# name: test_swct
+  tuple(
+    Array([[0.0, 0.0, 0.0]], dtype=float32),
+    Array([[9.41e-05, -6.9e-05, 0.0001135]], dtype=float32),
+  )
+# ---
+# name: test_wf_change
+  Array(0.9999958, dtype=float32)
+# ---
+# name: test_zvzb
+  tuple(
+    Array([[3.4e-06, 8.7e-06, 1.3e-06]], dtype=float32),
+    Array([[0.0, 0.0, 0.0]], dtype=float32),
+  )
+# ---
