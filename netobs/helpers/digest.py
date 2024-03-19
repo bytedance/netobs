@@ -83,3 +83,20 @@ def robust_mean_std(
     else:
         std = jnp.nanstd(clipped, axis=0)
     return (jnp.nanmean(clipped, axis=0), std / jnp.sqrt(clipped.shape[0]))
+
+
+def weighted_sum(a: jnp.ndarray, weights: jnp.ndarray) -> jnp.ndarray:
+    """Taking average, but align array and weights.
+
+    Ftuple[jnp.ndarray, jnp.ndarray]:tuple[jnp.ndarray, jnp.ndarray]:or example, (ijkl) * (ij) -> (kl).
+
+    Args:
+        a: JAX array.
+        weights: the weight for averaging.
+
+    Returns:
+        sum of weighted array
+    """
+    axis = tuple(range(len(weights.shape)))
+    weights = weights.reshape(weights.shape + (1,) * (a.ndim - weights.ndim))
+    return jnp.mean(a * weights, axis=axis)

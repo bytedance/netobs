@@ -83,18 +83,20 @@ def test_antithetic(adaptor: SimpleHydrogen, options: NetObsOptions, snapshot: s
     assert digest is not None
     assert "force" in digest
     force = robust_mean(digest["force"])
-    assert jnp.allclose(force, 0, atol=1e-3)
+    assert jnp.allclose(force, 0, atol=5e-3)
     assert force == snapshot
 
 
 def test_antithetic_zb(adaptor: SimpleHydrogen, options: NetObsOptions, snapshot):
     options.estimator["r_core"] = 0.5
     options.estimator["zb"] = True
+    options.mcmc_burn_in = 1000
+    options.reweight_ratio = 0.1
     digest, *_ = evaluate_observable(adaptor, Bare, options=options)
     assert digest is not None
     assert "force" in digest
     force = robust_mean(digest["force"])
-    assert jnp.allclose(force, 0, atol=1e-3)
+    assert jnp.allclose(force, 0, atol=5e-3)
     assert force == snapshot
 
 

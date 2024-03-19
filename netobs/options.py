@@ -33,6 +33,14 @@ class NetObsOptions:
     Defaults to None, which means use current time as random seed.
     """
 
+    reweight_ratio: float = 0.0
+    """Rough ratio of samples to reweight.
+    Defaults to 0, meaning no reweighting.
+    """
+
+    reweight_exp: float = 0.375
+    "Exponent theta for reweighting."
+
     log_interval: int = 10
     "Time interval in seconds between logs."
 

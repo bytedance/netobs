@@ -70,7 +70,8 @@ class TestHydrogen:
         params, data, system, aux_data = self.adaptor.restore("5")
         key = jax.random.PRNGKey(42)
         key = jax.random.split(key, 1)
-        mcmc_step = self.adaptor.make_walking_step(1, system)
+        batch_log_psi = jax.vmap(self.adaptor.call_network, (None, 0, None))
+        mcmc_step = self.adaptor.make_walking_step(batch_log_psi, 1, system)
         assert mcmc_step(key, params, data, aux_data)[0] == snapshot
 
 
@@ -121,7 +122,8 @@ class TestFermiNet:
         params, data, system, aux_data = self.adaptor.restore(self.net_retore)
         key = jax.random.PRNGKey(42)
         key = jax.random.split(key, 1)
-        mcmc_step = self.adaptor.make_walking_step(1, system)
+        batch_log_psi = jax.vmap(self.adaptor.call_network, (None, 0, None))
+        mcmc_step = self.adaptor.make_walking_step(batch_log_psi, 1, system)
         assert mcmc_step(key, params, data, aux_data)[0] == snapshot
 
 
@@ -163,6 +165,7 @@ class TestDeepSolid:
         params, data, system, aux_data = self.adaptor.restore(self.net_retore)
         key = jax.random.PRNGKey(42)
         key = jax.random.split(key, 1)
-        mcmc_step = self.adaptor.make_walking_step(1, system)
+        batch_log_psi = jax.vmap(self.adaptor.call_network, (None, 0, None))
+        mcmc_step = self.adaptor.make_walking_step(batch_log_psi, 1, system)
         data = mcmc_step(key, params, data, aux_data)[0]
         assert jnp.array(data) == snapshot  # ShardedDeviceArray -> DeviceArray

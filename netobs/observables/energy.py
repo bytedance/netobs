@@ -49,12 +49,8 @@ class EnergyEstimator(Estimator):
     def evaluate(self, i, params, key, electrons, system, state, aux_data):
         del i, aux_data
         return {
-            "kinetic": jnp.mean(
-                self.batch_kinetic_energy(params, key, electrons, system), axis=(0, 1)
-            ),
-            "potential": jnp.mean(
-                self.batch_potential_energy(params, key, electrons, system), axis=(0, 1)
-            ),
+            "kinetic": self.batch_kinetic_energy(params, key, electrons, system),
+            "potential": self.batch_potential_energy(params, key, electrons, system),
         }, state
 
     def digest(self, all_values, state):

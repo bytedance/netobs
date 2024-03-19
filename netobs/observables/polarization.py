@@ -67,7 +67,7 @@ class PolarizationEstimator(Estimator[SolidSystem]):
             phase = self.batch_phase_antithetic(params, data, system)
         else:
             phase = self.batch_phase(data)
-        return {"phase": jnp.mean(phase, axis=(0, 1))}, state
+        return {"phase": phase}, state
 
     def digest(self, all_values, state) -> dict[str, jnp.ndarray]:
         del state

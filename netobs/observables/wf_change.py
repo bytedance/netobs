@@ -55,8 +55,8 @@ class WFChangeEstimator(Estimator):
         new_atoms = system["atoms"].at[0, 0].add(5e-3)
         logpsi_1 = self.batch_network(params, data, {**system, "atoms": new_atoms})
         return {
-            "numerator": jnp.mean(jnp.exp(logpsi_1 - logpsi_0), axis=(0, 1)),
-            "denominator": jnp.mean(jnp.exp(2 * (logpsi_1 - logpsi_0)), axis=(0, 1)),
+            "numerator": jnp.exp(logpsi_1 - logpsi_0),
+            "denominator": jnp.exp(2 * (logpsi_1 - logpsi_0)),
         }, state
 
     def digest(self, all_values, state):

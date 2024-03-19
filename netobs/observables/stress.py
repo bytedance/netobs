@@ -71,10 +71,8 @@ class StressEstimator(Estimator[SolidSystem]):
     def evaluate(self, i, params, key, data, system, state, aux_data):
         del i, aux_data, key
         return {
-            "stress_kin": jnp.mean(
-                self.batch_kinetic_part(params, data, system), axis=(0, 1)
-            ),
-            "stress_pot": jnp.mean(self.batch_potential_part(data), axis=(0, 1)),
+            "stress_kin": self.batch_kinetic_part(params, data, system),
+            "stress_pot": self.batch_potential_part(data),
         }, state
 
     def digest(self, all_values, state) -> dict[str, jnp.ndarray]:

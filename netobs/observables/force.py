@@ -126,26 +126,21 @@ class Bare(Estimator[System]):
 
     def evaluate(self, i, params, key, data, system, state, aux_data):
         del i, aux_data
-        hfm_term = -jnp.mean(
-            self.grad_potential(params, key, data, system), axis=(0, 1)
-        )
+        hfm_term = -self.grad_potential(params, key, data, system)
         if self.r_core > 0:
             data_mirrored, mirrored_weight = self.batch_mirror(params, data, system)
-            hfm_anti = -jnp.mean(
-                self.grad_potential(params, key, data_mirrored, system)
-                * mirrored_weight[..., None, None],
-                axis=(0, 1),
+            hfm_anti = (
+                -self.grad_potential(params, key, data_mirrored, system)
+                * mirrored_weight[..., None, None]
             )
             hfm_term = (hfm_term + hfm_anti) / 2
         values = {"hfm_term": hfm_term}
         if self.enable_zb:
             pulay_coeff = 2 * self.batch_f_deriv_atom(params, data, system)
             el = self.batch_local_energy(params, key, data, system)
-            values["el"] = jnp.mean(el)
-            values["el_term"] = jnp.mean(
-                -el[..., None, None] * pulay_coeff, axis=(0, 1)
-            )
-            values["pulay_coeff"] = jnp.mean(pulay_coeff, axis=(0, 1))
+            values["el"] = el
+            values["el_term"] = -el[..., None, None] * pulay_coeff
+            values["pulay_coeff"] = pulay_coeff
         return values, state
 
     def digest(self, all_values, state) -> dict[str, jnp.ndarray]:
@@ -205,15 +200,13 @@ class AC(Estimator[MolecularSystem]):
 
     def evaluate(self, i, params, key, data, system, state, aux_data):
         del i, aux_data
-        values = {"hf_term": jnp.mean(self.batch_zv(params, data, system), axis=(0, 1))}
+        values = {"hf_term": self.batch_zv(params, data, system)}
         if self.enable_zb:
             pulay_coeff = 2 * self.batch_Q(data, system)
             el = self.batch_local_energy(params, key, data, system)
-            values["el"] = jnp.mean(el)
-            values["el_term"] = jnp.mean(
-                -el[..., None, None] * pulay_coeff, axis=(0, 1)
-            )
-            values["ev_term_coeff"] = jnp.mean(pulay_coeff, axis=(0, 1))
+            values["el"] = el
+            values["el_term"] = -el[..., None, None] * pulay_coeff
+            values["ev_term_coeff"] = pulay_coeff
         return values, state
 
     def digest(self, all_values, state) -> dict[str, jnp.ndarray]:
@@ -341,26 +334,20 @@ class SWCT(Estimator[System]):
 
     def evaluate(self, i, params, key, data, system, state, aux_data):
         del i, aux_data
-        hfm_bare = -jnp.mean(
-            self.batch_el_deriv_atom(params, key, data, system), axis=(0, 1)
-        )
+        hfm_bare = -self.batch_el_deriv_atom(params, key, data, system)
         pulay_bare = 2 * self.batch_f_deriv_atom(params, data, system)
         el = self.batch_local_energy(params, key, data, system)
         values = {
             "hfm_bare": hfm_bare,
-            "pulay_bare": jnp.mean(pulay_bare, axis=(0, 1)),
-            "el": jnp.mean(el),
-            "el_term_bare": jnp.mean(-el[..., None, None] * pulay_bare, axis=(0, 1)),
+            "pulay_bare": pulay_bare,
+            "el": el,
+            "el_term_bare": -el[..., None, None] * pulay_bare,
         }
         if self.warp:
             pulay_warp = self.batch_pulay_coeff_warp(params, data, system)
-            values["hfm_warp"] = jnp.mean(
-                self.batch_hfm_warp(params, key, data, system), axis=(0, 1)
-            )
-            values["pulay_warp"] = jnp.mean(pulay_warp, axis=(0, 1))
-            values["el_term_warp"] = jnp.mean(
-                -el[..., None, None] * pulay_warp, axis=(0, 1)
-            )
+            values["hfm_warp"] = self.batch_hfm_warp(params, key, data, system)
+            values["pulay_warp"] = pulay_warp
+            values["el_term_warp"] = -el[..., None, None] * pulay_warp
         return values, state
 
     def digest(self, all_values, state) -> dict[str, jnp.ndarray]:

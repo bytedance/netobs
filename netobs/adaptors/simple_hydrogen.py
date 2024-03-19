@@ -14,8 +14,7 @@
 
 from __future__ import annotations
 
-from functools import partial
-from typing import Any, TypedDict
+from typing import Any, Callable, TypedDict
 
 import jax
 from jax import numpy as jnp
@@ -76,9 +75,7 @@ class SimpleHydrogen(NetworkAdaptor):
         return 1, -r_ae * self.quality - r_ae**2 * (1 - self.quality)
 
     def make_walking_step(
-        self,
-        steps: int,
-        system: MolecularSystem,
+        self, batch_log_psi: Callable, steps: int, system: MolecularSystem
     ) -> WalkingStep[HydrogenAuxData]:
         def walk(
             key: jnp.ndarray,
@@ -92,7 +89,7 @@ class SimpleHydrogen(NetworkAdaptor):
                 x1, key, lp_1 = data
                 key, subkey = jax.random.split(key)
                 x2 = x1 + stddev * jax.random.normal(subkey, shape=x1.shape)  # proposal
-                lp_2 = 2.0 * self.batch_network(params, x2, system)
+                lp_2 = 2.0 * batch_log_psi(params, x2, system)
                 ratio = lp_2 - lp_1
 
                 key, subkey = jax.random.split(key)
@@ -102,7 +99,7 @@ class SimpleHydrogen(NetworkAdaptor):
 
                 return x_new, key, lp_new
 
-            logprob = 2.0 * self.batch_network(params, electrons, system)
+            logprob = 2.0 * batch_log_psi(params, electrons, system)
             new_data, *_ = jax.lax.fori_loop(
                 0, steps, mh_update, (electrons, key, logprob)
             )
@@ -143,10 +140,6 @@ class SimpleHydrogen(NetworkAdaptor):
         # _, r_ae = calculate_r_ae(electrons, system)
         # r_ae = r_ae[0, 0, 0]  # 1st electron, 1st atom
         return -1 / r_ae
-
-    @partial(jax.vmap, in_axes=(None, None, 0, None))
-    def batch_network(self, params, electrons, system):
-        return self.call_network(params, electrons, system)
 
 
 DEFAULT = SimpleHydrogen

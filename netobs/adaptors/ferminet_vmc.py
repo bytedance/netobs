@@ -17,7 +17,7 @@ from __future__ import annotations
 import dataclasses
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Callable, Literal, cast
 
 import ferminet.constants
 import ferminet.hamiltonian
@@ -139,15 +139,10 @@ class FermiNetJAXAdaptor(NetworkAdaptor[MolecularSystem]):
         return self.fermi_net(params, electrons, atoms=system["atoms"])
 
     def make_walking_step(
-        self,
-        steps: int,
-        system: MolecularSystem,
+        self, batch_log_psi: Callable, steps: int, system: MolecularSystem
     ) -> WalkingStep[FerminetVMCAuxData]:
-        batch_network = jax.vmap(
-            partial(self.call_network, system=system), in_axes=(None, 0), out_axes=0
-        )
         mcmc_step = ferminet.mcmc.make_mcmc_step(
-            batch_network,
+            lambda params, electrons, *_: batch_log_psi(params, electrons, system),
             batch_per_device=1,  # useless
             steps=steps,
         )
@@ -259,19 +254,10 @@ class FermiNetMainAdaptor(NetworkAdaptor):
         )
 
     def make_walking_step(
-        self,
-        steps: int,
-        system: MolecularSystem,
+        self, batch_log_psi: Callable, steps: int, system: MolecularSystem
     ) -> WalkingStep[FerminetVMCAuxData]:
-        del system
-
-        batch_network = jax.vmap(
-            lambda *args, **kwargs: self.fermi_net(*args, **kwargs)[1],
-            in_axes=(None, 0, None, None, None),
-            out_axes=0,
-        )
         mcmc_step = ferminet.mcmc.make_mcmc_step(
-            batch_network,
+            lambda params, electrons, *_: batch_log_psi(params, electrons, system),
             batch_per_device=1,  # useless
             steps=steps,
         )

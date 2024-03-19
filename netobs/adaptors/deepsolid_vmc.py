@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from functools import partial
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import DeepSolid.hamiltonian
 import DeepSolid.hf
@@ -178,15 +178,10 @@ class DeepSolidVMCAdaptor(NetworkAdaptor[SolidSystem]):
         return output
 
     def make_walking_step(
-        self,
-        steps: int,
-        system: SolidSystem,
+        self, batch_log_psi: Callable, steps: int, system: SolidSystem
     ) -> WalkingStep[DeepSolidVMCAuxData]:
-        batch_network = jax.vmap(
-            partial(self.call_network, system=system), in_axes=(None, 0)
-        )
         mcmc_step = DeepSolid.qmc.make_mcmc_step(
-            batch_network,
+            lambda params, electrons: batch_log_psi(params, electrons, system),
             batch_per_device=1,  # useless
             latvec=system["latvec"],
             steps=steps,

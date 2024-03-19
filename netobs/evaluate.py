@@ -23,7 +23,7 @@ from jax import numpy as jnp
 
 from netobs.adaptors import NetworkAdaptor
 from netobs.checkpoint import CheckpointManager
-from netobs.helpers.digest import robust_mean_std
+from netobs.helpers.digest import robust_mean_std, weighted_sum
 from netobs.logging import logger
 from netobs.observables import Estimator
 from netobs.options import NetObsOptions
@@ -74,8 +74,14 @@ def evaluate_observable(
 
     sharded_key = make_different_rng_key_on_all_devices(key)
 
+    empty_val, empty_state = estimator.empty_val_state(options.steps)
+
+    if options.reweight_ratio > 0.0:
+        logger.info("Reweighting is enabled.")
+        empty_val["reweighting_weights"] = jnp.zeros((options.steps,))
+
     init_step, new_data, all_values, state, aux_data = checkpoint_mgr.restore(
-        *estimator.empty_val_state(options.steps), aux_data
+        empty_val, empty_state, aux_data
     )
     if new_data is not None:
         data = new_data
@@ -88,18 +94,39 @@ def evaluate_observable(
 
     if init_step >= options.steps:  # re-exporting data
         digest = estimator.digest(all_values, state)
-        for k, v in digest.items():
-            print(k, v, sep="\n")
+        log_digest(options.steps - 1, digest)
+        if init_step != options.steps:  # save ckpt with less steps
+            checkpoint_mgr.save(
+                options.steps - 1, data, digest, all_values, state, aux_data, metadata
+            )
         return digest, all_values, state
+
+    batch_log_psi = jax.vmap(network_adaptor.call_network, (None, 0, None))
+    pmap_log_psi = jax.pmap(batch_log_psi, in_axes=(0, 0, None))
+
+    if options.reweight_ratio > 0.0:
+        log_psi = pmap_log_psi(params, data, system)
+        log_eps = options.reweight_exp * jnp.quantile(log_psi, options.reweight_ratio)
+        logger.info("Setting log epsilon to %s", log_eps)
+
+        def reweighting_log_psi(params, electrons, system):
+            log_psi = network_adaptor.call_network(params, electrons, system)
+            return jnp.maximum(log_psi, log_eps + (1 - options.reweight_exp) * log_psi)
+
+        batch_guide_log_psi = jax.vmap(reweighting_log_psi, (None, 0, None))
+    else:
+        batch_guide_log_psi = batch_log_psi
 
     logger.info("Start burning in %s steps", options.mcmc_burn_in)
     call_burnin_step = network_adaptor.make_burnin_step(
-        options.mcmc_burn_in * options.mcmc_steps, system
+        batch_guide_log_psi, options.mcmc_burn_in * options.mcmc_steps, system
     )
     sharded_key, subkeys = p_split(sharded_key)
     call_burnin_step(subkeys, params, data, aux_data)
 
-    call_walking_step = network_adaptor.make_walking_step(options.mcmc_steps, system)
+    call_walking_step = network_adaptor.make_walking_step(
+        batch_guide_log_psi, options.mcmc_steps, system
+    )
 
     time_start = None  # initialize later to be more accurate
     last_log = time.time()
@@ -110,7 +137,20 @@ def evaluate_observable(
         obs_values, state = estimator.evaluate(
             i, params, subkeys, data, system, state, aux_data
         )
-        all_values = {k: v.at[i].set(obs_values[k]) for k, v in all_values.items()}
+
+        if options.reweight_ratio > 0.0:
+            log_psi = pmap_log_psi(params, data, system)
+            weights = jnp.minimum(
+                1, jnp.exp(options.reweight_exp * 2 * log_psi - 2 * log_eps)
+            )
+            mean_obs_values = {
+                k: weighted_sum(v, weights) for k, v in obs_values.items()
+            }
+            mean_obs_values["reweighting_weights"] = jnp.mean(weights)
+        else:
+            mean_obs_values = {k: jnp.mean(v, (0, 1)) for k, v in obs_values.items()}
+
+        all_values = {k: v.at[i].set(mean_obs_values[k]) for k, v in all_values.items()}
         sharded_key, subkeys = p_split(sharded_key)
         data, aux_data = call_walking_step(subkeys, params, data, aux_data)
 
@@ -123,6 +163,10 @@ def evaluate_observable(
         if not should_save and not should_log:
             continue
         all_values_yet = {k: v[: i + 1] for k, v in all_values.items()}
+
+        if options.reweight_ratio > 0.0:
+            mean_weights = jnp.mean(all_values_yet.pop("reweighting_weights"))
+            all_values_yet = {k: v / mean_weights for k, v in all_values_yet.items()}
         digest = estimator.digest(all_values_yet, state)
 
         if should_save:
@@ -139,6 +183,9 @@ def evaluate_observable(
         logger.info(
             "Time per step: %.2fs", (time.time() - time_start) / (i - init_step)
         )
+    if options.reweight_ratio > 0.0:
+        mean_weights = jnp.mean(all_values.pop("reweighting_weights"))
+        all_values = {k: v / mean_weights for k, v in all_values.items()}
     digest = estimator.digest(all_values, state)
     log_digest(i, digest)
     checkpoint_mgr.save(i, data, digest, all_values, state, aux_data, metadata)

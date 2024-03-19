@@ -1,9 +1,9 @@
 # serializer version: 1
 # name: test_antithetic
-  Array([[-0.0008155, 0.0009491, -0.0002362]], dtype=float32)
+  Array([[-0.0008045, 0.0011302, -0.0004956]], dtype=float32)
 # ---
 # name: test_antithetic_zb
-  Array([[-0.0008593, 0.0003511, 0.000409]], dtype=float32)
+  Array([[-0.0003859, -0.0012329, -0.0017145]], dtype=float32)
 # ---
 # name: test_bare
   Array([[0.0891896, -0.0699865, 0.1169906]], dtype=float32)

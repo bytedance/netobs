@@ -37,7 +37,7 @@ And an instance of `AwesomeNetAdaptor` should then be passed to `evaluate_observ
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Generic, Protocol, TypeVar
+from typing import Any, Callable, Generic, Protocol, TypeVar
 
 import jax
 from jax import numpy as jnp
@@ -154,10 +154,19 @@ class NetworkAdaptor(ABC, Generic[X]):
         return self.call_signed_network(params, electrons, system)[1]
 
     @abstractmethod
-    def make_walking_step(self, steps: int, system: X) -> WalkingStep:
+    def make_walking_step(
+        self,
+        batch_log_psi: Callable[[jnp.ndarray, jnp.ndarray, X], jnp.ndarray],
+        steps: int,
+        system: X,
+    ) -> WalkingStep:
         """Make MCMC walking step.
 
         Args:
+            batch_log_psi: Batched function returning log psi.
+                (params, (nbatch, nelec*ndim), system) -> (nbatch,)
+                We receive it as input because the importance sampling can be based on
+                another psi_G instead of base psi_T.
             steps: Number of MCMC steps to run.
             system: system containing atomic info.
 
@@ -165,19 +174,25 @@ class NetworkAdaptor(ABC, Generic[X]):
             Function with the same signature as WalkingStep
         """
 
-    def make_burnin_step(self, steps: int, system: X) -> WalkingStep:
+    def make_burnin_step(
+        self,
+        batch_log_psi: Callable[[jnp.ndarray, jnp.ndarray, X], jnp.ndarray],
+        steps: int,
+        system: X,
+    ) -> WalkingStep:
         """Make MCMC burnin step.
 
         By default, this is the same as make_walking_step.
 
         Args:
+            batch_log_psi: Batched function returning log psi.
             steps: Number of MCMC steps to run.
             system: system containing atomic info.
 
         Returns:
             Function with the same signature as WalkingStep
         """
-        return self.make_walking_step(steps, system)
+        return self.make_walking_step(batch_log_psi, steps, system)
 
     def call_local_energy(
         self, params: jnp.ndarray, key: jnp.ndarray, electrons: jnp.ndarray, system: X
