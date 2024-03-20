@@ -150,9 +150,9 @@ def evaluate_observable(
         else:
             mean_obs_values = {k: jnp.mean(v, (0, 1)) for k, v in obs_values.items()}
 
+        has_nan = any(jnp.isnan(v).any() for v in mean_obs_values.values())
+
         all_values = {k: v.at[i].set(mean_obs_values[k]) for k, v in all_values.items()}
-        sharded_key, subkeys = p_split(sharded_key)
-        data, aux_data = call_walking_step(subkeys, params, data, aux_data)
 
         # Logging and saving
         now = time.time()
@@ -160,22 +160,33 @@ def evaluate_observable(
             time_start = now
         should_log = last_log < now - options.log_interval
         should_save = last_save < now - options.save_interval
-        if not should_save and not should_log:
-            continue
-        all_values_yet = {k: v[: i + 1] for k, v in all_values.items()}
 
-        if options.reweight_ratio > 0.0:
-            mean_weights = jnp.mean(all_values_yet.pop("reweighting_weights"))
-            all_values_yet = {k: v / mean_weights for k, v in all_values_yet.items()}
-        digest = estimator.digest(all_values_yet, state)
+        if has_nan or should_save or should_log:
+            all_values_yet = {k: v[: i + 1] for k, v in all_values.items()}
 
-        if should_save:
-            last_save = now
-            checkpoint_mgr.save(i, data, digest, all_values, state, aux_data, metadata)
-        # Also log when should save
-        last_log = now
-        logger.info("Loop %s", i)
-        log_digest(i, digest)
+            if options.reweight_ratio > 0.0:
+                mean_weights = jnp.mean(all_values_yet.pop("reweighting_weights"))
+                all_values_yet = {
+                    k: v / mean_weights for k, v in all_values_yet.items()
+                }
+            digest = estimator.digest(all_values_yet, state)
+
+            if has_nan or should_save:
+                last_save = now
+                checkpoint_mgr.save(
+                    i, data, digest, all_values, state, aux_data, metadata
+                )
+            # Also log when should save
+            last_log = now
+            logger.info("Loop %s", i)
+            log_digest(i, digest)
+
+            if has_nan:
+                logger.error("NaN detected. Stopping")
+                return digest, all_values, state
+
+        sharded_key, subkeys = p_split(sharded_key)
+        data, aux_data = call_walking_step(subkeys, params, data, aux_data)
 
     if i == init_step or time_start is None:
         logger.warning("Not enough steps to calculate time per step.")
