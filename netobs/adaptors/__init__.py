@@ -258,3 +258,11 @@ class NetworkAdaptor(ABC, Generic[X]):
             The gradient function.
         """
         return grad_with_system(self.call_local_energy, arg)  # type: ignore
+
+
+# Utility protocols
+class LogPsiNet(Protocol):
+    def __call__(
+        self, params: jnp.ndarray, electrons: jnp.ndarray, system: System
+    ) -> jnp.ndarray:
+        pass

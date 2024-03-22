@@ -20,7 +20,7 @@ from netobs.evaluate import evaluate_observable
 from netobs.helpers.digest import robust_mean
 from netobs.observables.density import DensityEstimator
 from netobs.observables.energy import EnergyEstimator
-from netobs.observables.force import AC, SWCT, Antithetic, Bare
+from netobs.observables.force import AC, SWCT, Bare
 from netobs.observables.wf_change import WFChangeEstimator
 from netobs.options import NetObsOptions
 
@@ -71,14 +71,15 @@ def test_density(adaptor: SimpleHydrogen, options: NetObsOptions, snapshot):
 def test_bare(adaptor: SimpleHydrogen, options: NetObsOptions, snapshot: str):
     digest, *_ = evaluate_observable(adaptor, Bare, options=options)
     assert digest is not None
-    assert "value" in digest
-    force = robust_mean(digest["value"])
+    assert "force" in digest
+    force = robust_mean(digest["force"])
     assert jnp.allclose(force, 0, atol=0.2)
     assert force == snapshot
 
 
 def test_antithetic(adaptor: SimpleHydrogen, options: NetObsOptions, snapshot: str):
-    digest, *_ = evaluate_observable(adaptor, Antithetic, options=options)
+    options.estimator["r_core"] = 0.5
+    digest, *_ = evaluate_observable(adaptor, Bare, options=options)
     assert digest is not None
     assert "force" in digest
     force = robust_mean(digest["force"])
@@ -87,8 +88,9 @@ def test_antithetic(adaptor: SimpleHydrogen, options: NetObsOptions, snapshot: s
 
 
 def test_antithetic_zb(adaptor: SimpleHydrogen, options: NetObsOptions, snapshot):
+    options.estimator["r_core"] = 0.5
     options.estimator["zb"] = True
-    digest, *_ = evaluate_observable(adaptor, Antithetic, options=options)
+    digest, *_ = evaluate_observable(adaptor, Bare, options=options)
     assert digest is not None
     assert "force" in digest
     force = robust_mean(digest["force"])

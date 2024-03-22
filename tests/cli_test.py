@@ -34,7 +34,7 @@ def test_cli():
         [
             "@ferminet_vmc",
             "tests/data/H_atom.py",
-            "@force:Antithetic",
+            "@force:Bare",
             "--with",
             "steps=1",
             "--net-restore",

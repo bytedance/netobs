@@ -15,13 +15,13 @@
 from __future__ import annotations
 
 from functools import partial, wraps
-from typing import Callable
+from typing import Callable, cast
 
 import jax
 import jax.numpy as jnp
 from jax.tree_util import register_pytree_node_class
 
-from netobs.adaptors import NetworkAdaptor
+from netobs.adaptors import LogPsiNet, NetworkAdaptor
 from netobs.helpers.chunk_vmap import chunk_vmap
 from netobs.helpers.digest import robust_mean
 from netobs.helpers.grad import grad_with_system
@@ -29,12 +29,47 @@ from netobs.logging import logger
 from netobs.observables import Estimator, Observable
 from netobs.systems import System
 from netobs.systems.molecule import MolecularSystem, calculate_r_ae
-from netobs.systems.solid import MinimalImageDistance
+from netobs.systems.solid import MinimalImageDistance, SolidSystem
 
 
 class Force(Observable):
     def shapeof(self, system) -> tuple[int, ...]:
         return (system["atoms"].shape[0], system["ndim"])
+
+
+def make_antithetic(system: System, call_network: LogPsiNet, r_core: float = 0.5):
+    if "latvec" in system:
+        system = cast(SolidSystem, system)
+        dist = MinimalImageDistance(system["latvec"])
+        logger.info("Using periodic version of Antithetic")
+
+        def get_closest_r_ae(electrons, system):
+            return dist.closest_r_ae(electrons, system["atoms"])
+    else:
+        logger.info("Using molecular version of Antithetic")
+        get_closest_r_ae = calculate_r_ae
+
+    @partial(jax.pmap, in_axes=(0, 0, None))
+    @partial(jax.vmap, in_axes=(None, 0, None))
+    def batch_mirror(params: jnp.ndarray, x: jnp.ndarray, system: System):
+        ae, r_ae = get_closest_r_ae(x, system)
+        idx_closest_atom = jnp.argmin(r_ae, axis=1)
+        closest_r_ae = jnp.min(r_ae, axis=1, keepdims=True)
+        # Shape (nelectron, natom, 3)
+        closest_ae = jax.vmap(lambda x, ind: x[ind])(ae, idx_closest_atom)
+        is_core_electron = closest_r_ae < r_core
+        electrons = x.reshape((-1, 1, 3))
+        electrons_mirrored = jnp.where(
+            is_core_electron, electrons - 2 * closest_ae, electrons
+        )
+        x_mirrored = jnp.reshape(electrons_mirrored, (-1,))
+        mirrored_weight = jnp.exp(
+            (call_network(params, x_mirrored, system) - call_network(params, x, system))
+            * 2
+        )
+        return x_mirrored, mirrored_weight
+
+    return batch_mirror
 
 
 class Bare(Estimator[System]):
@@ -50,40 +85,13 @@ class Bare(Estimator[System]):
         observable_options: dict,
     ):
         super().__init__(adaptor, system, estimator_options, observable_options)
-        self.grad_potential = jax.pmap(
-            jax.vmap(
-                grad_with_system(adaptor.call_local_potential_energy, "atoms"),
-                in_axes=(None, None, 0, None),
-            ),
-            in_axes=(0, 0, 0, None),
-        )
-
-    def evaluate(self, i, params, key, data, system, state, aux_data):
-        del i, aux_data
-        return {
-            "value": -jnp.mean(
-                self.grad_potential(params, key, data, system), axis=(0, 1)
+        self.enable_zb = estimator_options.get("zb", False)
+        self.r_core = estimator_options.get("r_core", 0)
+        if self.r_core > 0:
+            logger.info("Antithetic enabled")
+            self.batch_mirror = make_antithetic(
+                system, adaptor.call_network, self.r_core
             )
-        }, state
-
-
-@register_pytree_node_class
-class Antithetic(Estimator[System]):
-    observable_type = Force
-
-    closest_r_ae: Callable[[jnp.ndarray, System], tuple[jnp.ndarray, jnp.ndarray]]
-    "Dynammic function for calculating r_ae in molecular and solid systems."
-
-    def __init__(
-        self,
-        adaptor: NetworkAdaptor[System],
-        system: System,
-        estimator_options: dict,
-        observable_options: dict,
-    ):
-        super().__init__(adaptor, system, estimator_options, observable_options)
-        self.r_core = estimator_options.get("r_core", 0.5)
-        self.enable_zb = self.options.get("zb", False)
         self.grad_potential = jax.pmap(
             jax.vmap(
                 grad_with_system(adaptor.call_local_potential_energy, "atoms"),
@@ -99,44 +107,37 @@ class Antithetic(Estimator[System]):
             jax.vmap(adaptor.make_network_grad("atoms"), in_axes=(None, 0, None)),
             in_axes=(0, 0, None),
         )
-        if "latvec" in system:
-            dist = MinimalImageDistance(system["latvec"])  # type: ignore
-            self.closest_r_ae = lambda x, s: dist.closest_r_ae(x, s["atoms"])
-            logger.info("Using periodic version of Antithetic")
-        else:
-            self.closest_r_ae = lambda x, s: calculate_r_ae(x, s)  # type: ignore
-            logger.info("Using molecular version of Antithetic")
 
     def empty_val_state(self, steps: int):
         term_shape = (steps, *self.observable.shape)
         dtype = self.options.get("dtype")
         empty_values = {
-            "force_0": jnp.zeros(term_shape, dtype),
-            "force_1": jnp.zeros(term_shape, dtype),
+            "hfm_term": jnp.zeros(term_shape, dtype),
         }
         if self.enable_zb:
             empty_values.update(
                 {
                     "el": jnp.zeros(steps, dtype),
                     "el_term": jnp.zeros(term_shape, dtype),
-                    "ev_term_coeff": jnp.zeros(term_shape, dtype),
+                    "pulay_coeff": jnp.zeros(term_shape, dtype),
                 }
             )
         return empty_values, {}
 
     def evaluate(self, i, params, key, data, system, state, aux_data):
         del i, aux_data
-        data_mirrored, mirrored_weight = self.batch_mirror(params, data, system)
-        values = {
-            "force_0": -jnp.mean(
-                self.grad_potential(params, key, data, system), axis=(0, 1)
-            ),
-            "force_1": -jnp.mean(
+        hfm_term = -jnp.mean(
+            self.grad_potential(params, key, data, system), axis=(0, 1)
+        )
+        if self.r_core > 0:
+            data_mirrored, mirrored_weight = self.batch_mirror(params, data, system)
+            hfm_anti = -jnp.mean(
                 self.grad_potential(params, key, data_mirrored, system)
                 * mirrored_weight[..., None, None],
                 axis=(0, 1),
-            ),
-        }
+            )
+            hfm_term = (hfm_term + hfm_anti) / 2
+        values = {"hfm_term": hfm_term}
         if self.enable_zb:
             pulay_coeff = 2 * self.batch_f_deriv_atom(params, data, system)
             el = self.batch_local_energy(params, key, data, system)
@@ -144,47 +145,23 @@ class Antithetic(Estimator[System]):
             values["el_term"] = jnp.mean(
                 -el[..., None, None] * pulay_coeff, axis=(0, 1)
             )
-            values["ev_term_coeff"] = jnp.mean(pulay_coeff, axis=(0, 1))
-
+            values["pulay_coeff"] = jnp.mean(pulay_coeff, axis=(0, 1))
         return values, state
 
     def digest(self, all_values, state) -> dict[str, jnp.ndarray]:
         del state
-        values = {"bare": all_values["force_0"]}
-        hf_term = (all_values["force_0"] + all_values["force_1"]) / 2
+        values = {}
+        hf_term = all_values["hfm_term"]
         if self.enable_zb:
             energy_mean = robust_mean(all_values["el"])
             values["energy"] = all_values["el"]
             # Don't use mean of ev_term_coeff, because it will increase fluctuations
-            product = all_values["ev_term_coeff"] * energy_mean
+            product = all_values["pulay_coeff"] * energy_mean
             values["force_biased"] = hf_term
             values["force"] = hf_term + all_values["el_term"] + product
         else:
             values["force"] = hf_term
         return values
-
-    @partial(jax.pmap, in_axes=(None, 0, 0, None))
-    @partial(jax.vmap, in_axes=(None, None, 0, None))
-    def batch_mirror(self, params: jnp.ndarray, x: jnp.ndarray, system: System):
-        ae, r_ae = self.closest_r_ae(x, system)
-        idx_closest_atom = jnp.argmin(r_ae, axis=1)
-        closest_r_ae = jnp.min(r_ae, axis=1, keepdims=True)
-        # Shape (nelectron, natom, 3)
-        closest_ae = jax.vmap(lambda x, ind: x[ind])(ae, idx_closest_atom)
-        is_core_electron = closest_r_ae < self.r_core
-        electrons = x.reshape((-1, 1, 3))
-        electrons_mirrored = jnp.where(
-            is_core_electron, electrons - 2 * closest_ae, electrons
-        )
-        x_mirrored = jnp.reshape(electrons_mirrored, (-1,))
-        mirrored_weight = jnp.exp(
-            (
-                self.adaptor.call_network(params, x_mirrored, system)
-                - self.adaptor.call_network(params, x, system)
-            )
-            * 2
-        )
-        return x_mirrored, mirrored_weight
 
 
 @register_pytree_node_class
