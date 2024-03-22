@@ -48,7 +48,12 @@ def make_kinetic_energy(
     return wrapped_kinetic_energy
 
 
-def grad_with_system(f: Callable[..., jnp.ndarray], arg: str, args_before: int | None = None):
+def grad_with_system(
+    f: Callable[..., jnp.ndarray],
+    arg: str,
+    args_before: int | None = None,
+    jaxfun: Callable = jax.grad,
+):
     """Make grad of functions like f(*args, electrons, system).
 
     The last two args must be `electrons as `system`.
@@ -60,6 +65,7 @@ def grad_with_system(f: Callable[..., jnp.ndarray], arg: str, args_before: int |
             To grad with things inside `system`, use the key, e.g. "atoms".
         args_before: number of arguments before "electrons".
             Leaving it empty to automatically detect.
+        jaxfun: the type of gradient to take, e.g. `jax.grad`.
 
     Raises:
         ValueError: failing to detect the function signature
@@ -73,13 +79,13 @@ def grad_with_system(f: Callable[..., jnp.ndarray], arg: str, args_before: int |
             raise ValueError("Unable to determine function signature")
 
     if arg == "electrons":
-        return jax.grad(f, argnums=args_before)
+        return jaxfun(f, argnums=args_before)
 
     def wrap_f(*args):
         *args, x, system = args
         return f(*args, {**system, arg: x})
 
-    grad_local_energy = jax.grad(wrap_f, argnums=args_before + 1)
+    grad_local_energy = jaxfun(wrap_f, argnums=args_before + 1)
 
     def wrap_grad(*args):
         *args, system = args

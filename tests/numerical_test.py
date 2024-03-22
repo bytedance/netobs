@@ -20,7 +20,7 @@ from netobs.evaluate import evaluate_observable
 from netobs.helpers.digest import robust_mean
 from netobs.observables.density import DensityEstimator
 from netobs.observables.energy import EnergyEstimator
-from netobs.observables.force import AC, SWCT, Bare
+from netobs.observables.force import SWCT, Bare, MinAC
 from netobs.observables.wf_change import WFChangeEstimator
 from netobs.options import NetObsOptions
 
@@ -103,14 +103,14 @@ def test_antithetic_zb(adaptor: SimpleHydrogen, options: NetObsOptions, snapshot
 def test_zv_noerror(adaptor: SimpleHydrogen, options: NetObsOptions):
     options.mcmc_burn_in = 0
     options.steps = 1
-    digest, *_ = evaluate_observable(adaptor, AC, options=options)
+    digest, *_ = evaluate_observable(adaptor, MinAC, options=options)
     assert digest is not None
     assert "force" in digest
 
 
 def test_zvzb(adaptor: SimpleHydrogen, options: NetObsOptions, snapshot: str):
     options.estimator["zb"] = True
-    digest, *_ = evaluate_observable(adaptor, AC, options=options)
+    digest, *_ = evaluate_observable(adaptor, MinAC, options=options)
     assert digest is not None
     assert "force" in digest
     assert "force_zv" in digest

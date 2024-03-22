@@ -30,7 +30,7 @@
 # ---
 # name: test_zvzb
   tuple(
-    Array([[3.4e-06, 8.7e-06, 1.3e-06]], dtype=float32),
+    Array([[3.4e-06, 8.9e-06, 1.2e-06]], dtype=float32),
     Array([[0.0, 0.0, 0.0]], dtype=float32),
   )
 # ---

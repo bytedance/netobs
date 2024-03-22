@@ -22,7 +22,7 @@ from netobs.adaptors.simple_hydrogen import SimpleHydrogen
 from netobs.checkpoint import SavingCheckpointManager
 from netobs.evaluate import evaluate_observable
 from netobs.observables.energy import EnergyEstimator
-from netobs.observables.force import AC
+from netobs.observables.force import MinAC
 from netobs.options import NetObsOptions
 
 
@@ -72,7 +72,7 @@ def test_restore_zb_evaluate_zv(
 ):
     options.estimator["zb"] = True
     _, values, _ = evaluate_observable(
-        adaptor, AC, options=options, checkpoint_mgr=ckpt_mgr
+        adaptor, MinAC, options=options, checkpoint_mgr=ckpt_mgr
     )
     assert "el" in values
 
@@ -82,7 +82,7 @@ def test_restore_zb_evaluate_zv(
     with tempfile.TemporaryDirectory() as save_dir:
         ckpt_mgr.save_path = Path(save_dir)
         _, values, _ = evaluate_observable(
-            adaptor, AC, options=options, checkpoint_mgr=ckpt_mgr
+            adaptor, MinAC, options=options, checkpoint_mgr=ckpt_mgr
         )
         assert list(values.keys()) == ["hf_term"]
         assert len(os.listdir(ckpt_mgr.restore_path)) == 1

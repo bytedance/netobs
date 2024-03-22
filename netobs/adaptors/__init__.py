@@ -245,7 +245,7 @@ class NetworkAdaptor(ABC, Generic[X]):
             Local potential energy at this point.
         """
 
-    def make_network_grad(self, arg: str):
+    def make_network_grad(self, arg: str, jaxfun: Callable = jax.grad):
         """Create gradient function of network.
 
         Useful when the gradient handling is different in your network.
@@ -254,13 +254,29 @@ class NetworkAdaptor(ABC, Generic[X]):
 
         Args:
             arg: the name of arguments to calculate gradient, e.g. "electrons"/"atoms".
+            jaxfun: the type of gradient to take, e.g. `jax.grad`.
 
         Returns:
             The gradient function.
         """
-        return grad_with_system(self.call_network, arg)  # type: ignore
+        return grad_with_system(self.call_network, arg, jaxfun=jaxfun)  # type: ignore
 
-    def make_local_energy_grad(self, arg: str):
+    def make_signed_network_grad(self, arg: str, jaxfun: Callable = jax.grad):
+        """Create gradient function of network, taking sign into consideration.
+
+        Useful when the gradient handling is different in your network,
+        e.g. the network is complex-valued.
+
+        Args:
+            arg: the name of arguments to calculate gradient, e.g. "electrons"/"atoms".
+            jaxfun: the type of gradient to take, e.g. `jax.grad`.
+
+        Returns:
+            The gradient function.
+        """
+        return grad_with_system(self.call_network, arg, jaxfun=jaxfun)  # type: ignore
+
+    def make_local_energy_grad(self, arg: str, jaxfun: Callable = jax.grad):
         """Create gradient function of local energy.
 
         Useful when the gradient handling is different in your network,
@@ -268,11 +284,12 @@ class NetworkAdaptor(ABC, Generic[X]):
 
         Args:
             arg: the name of arguments to calculate gradient, e.g. "electrons"/"atoms".
+            jaxfun: the type of gradient to take, e.g. `jax.grad`.
 
         Returns:
             The gradient function.
         """
-        return grad_with_system(self.call_local_energy, arg)  # type: ignore
+        return grad_with_system(self.call_local_energy, arg, jaxfun=jaxfun)  # type: ignore
 
 
 # Utility protocols

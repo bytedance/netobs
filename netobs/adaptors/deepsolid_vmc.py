@@ -198,12 +198,31 @@ class DeepSolidVMCAdaptor(NetworkAdaptor[SolidSystem]):
 
         return jax.pmap(walk)
 
-    def make_local_energy_grad(self, arg: str):
+    def make_signed_network_grad(self, arg: str, jaxfun: Callable = jax.grad):
+        def complex_f(params, electrons, system):
+            sign, slogdet = self.call_signed_network(params, electrons, system)
+            return jnp.log(sign) + slogdet
+
+        grad_f_real = grad_with_system(
+            lambda *args: complex_f(*args).real, arg, args_before=1, jaxfun=jaxfun
+        )
+        grad_f_imag = grad_with_system(
+            lambda *args: complex_f(*args).imag, arg, args_before=1, jaxfun=jaxfun
+        )
+        return lambda *args: grad_f_real(*args) + grad_f_imag(*args) * 1j
+
+    def make_local_energy_grad(self, arg: str, jaxfun: Callable = jax.grad):
         grad_local_energy_real = grad_with_system(
-            lambda *args: self.call_local_energy(*args).real, arg, args_before=2
+            lambda *args: self.call_local_energy(*args).real,
+            arg,
+            args_before=2,
+            jaxfun=jaxfun,
         )
         grad_local_energy_imag = grad_with_system(
-            lambda *args: self.call_local_energy(*args).imag, arg, args_before=2
+            lambda *args: self.call_local_energy(*args).imag,
+            arg,
+            args_before=2,
+            jaxfun=jaxfun,
         )
         return (
             lambda *args: grad_local_energy_real(*args)
