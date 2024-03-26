@@ -284,6 +284,11 @@ class SWCT(Estimator[System]):
     def __init__(self, adaptor, system, estimator_options, observable_options):
         super().__init__(adaptor, system, estimator_options, observable_options)
         self.warp = bool(self.options.get("warp", True))
+        self.r_core = estimator_options.get("r_core", 0)
+        if self.r_core > 0:
+            self.batch_mirror = make_antithetic(
+                system, adaptor.call_network, self.r_core
+            )
 
         if "latvec" in system:
             dist = MinimalImageDistance(system["latvec"])
@@ -337,6 +342,11 @@ class SWCT(Estimator[System]):
         hfm_bare = -self.batch_el_deriv_atom(params, key, data, system)
         pulay_bare = 2 * self.batch_f_deriv_atom(params, data, system)
         el = self.batch_local_energy(params, key, data, system)
+        if self.r_core > 0:
+            m_data, weights = self.batch_mirror(params, data, system)
+            m_hfm_bare = -self.batch_el_deriv_atom(params, key, m_data, system)
+            weights = weights[..., None, None]
+            hfm_bare = (hfm_bare + m_hfm_bare * weights) / 2
         values = {
             "hfm_bare": hfm_bare,
             "pulay_bare": pulay_bare,
@@ -345,9 +355,14 @@ class SWCT(Estimator[System]):
         }
         if self.warp:
             pulay_warp = self.batch_pulay_coeff_warp(params, data, system)
-            values["hfm_warp"] = self.batch_hfm_warp(params, key, data, system)
+            hfm_warp = self.batch_hfm_warp(params, key, data, system)
+            if self.r_core > 0:
+                m_hfm_warp = self.batch_hfm_warp(params, key, m_data, system)
+                hfm_warp = (hfm_warp + m_hfm_warp * weights) / 2
+            values["hfm_warp"] = hfm_warp
             values["pulay_warp"] = pulay_warp
             values["el_term_warp"] = -el[..., None, None] * pulay_warp
+
         return values, state
 
     def digest(self, all_values, state) -> dict[str, jnp.ndarray]:
