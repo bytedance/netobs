@@ -53,8 +53,7 @@ std force_no_warp
 [[0.00146565 0.00108437 0.00165038]]
 ```
 
-> [!Note]
->
+> [!NOTE]
 > The standard error (std) here are rough estimates which does NOT take autocorrelation into consideration due to performance conserns. You are STRONGLY encouraged to analyze the data using your own code.
 
 </details>
@@ -65,6 +64,8 @@ Another example with DeepSolid:
 netobs @deepsolid_vmc tests/data/H_chain.py @energy --with steps=20 --net-restore tests/data/H_chain.npz
 ```
 
+> [!NOTE]
+> If you want to use the SWCT force estimator with DeepSolid, it is highly recommended to use the [`tri` feature](https://github.com/bytedance/DeepSolid/pull/3).
 
 ## Core Concepts
 
