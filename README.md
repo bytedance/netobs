@@ -115,3 +115,7 @@ For more details, check out [this test](tests/numerical_test.py) for how to star
 ## Contributing
 
 Contributions are welcomed and highly appreciated! We are open to new network `Adaptor`s and new `Estimator`s! For a detailed contribution guide, please see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Citation
+
+If you are using NetObs in your works, please consider [citing our papers](CITATIONS.bib).
