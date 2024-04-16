@@ -157,7 +157,7 @@ class DeepSolidVMCAdaptor(NetworkAdaptor[SolidSystem]):
         del key
         ep = self.local_potential(electrons, system)
         # HACK: grad potential requires real-valued potential
-        ecp = self.non_local_potential(params, electrons, system).real
+        ecp = self.non_local_potential(params, electrons, system["atoms"]).real
         return (ep + ecp) / self.cell_size
 
     def call_signed_network(
