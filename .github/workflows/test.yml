@@ -1,0 +1,50 @@
+name: Run Tests
+on:
+  push:
+    branches: ["main", "ci/**"]
+  pull_request:
+    branches: ["*"]
+jobs:
+  test-deepsolid:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: netobs
+      - uses: actions/checkout@v4
+        with:
+          repository: AllanChain/deepsolid
+          ref: update-with-force
+          path: deepsolid
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - name: Install
+        run: |
+          pip install -e deepsolid scipy==1.8.0
+          pip install 'jax[cpu]'==0.2.26 -f https://storage.googleapis.com/jax-releases/jax_releases.html
+          pip install -e 'netobs[dev]'
+      - name: Test
+        working-directory: netobs
+        run: pytest --snapshot-warn-unused
+  test-ferminet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: netobs
+      - uses: actions/checkout@v4
+        with:
+          repository: google-deepmind/ferminet
+          path: ferminet
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install
+        run: |
+          pip install -e ferminet
+          pip install 'jax[cpu]'==0.4.24 -f https://storage.googleapis.com/jax-releases/jax_releases.html
+          pip install -e 'netobs[dev]'
+      - name: Test
+        working-directory: netobs
+        run: pytest --snapshot-warn-unused
