@@ -1,9 +1,12 @@
 # serializer version: 1
-# name: TestDeepSolid.test_kinetic
-  DeviceArray(2.6760328-0.j, dtype=complex64)
+# name: TestDeepSolid.test_kinetic[imag]
+  DeviceArray(0.0, dtype=float32)
+# ---
+# name: TestDeepSolid.test_kinetic[real]
+  DeviceArray(2.67603, dtype=float32)
 # ---
 # name: TestDeepSolid.test_potential
-  DeviceArray(-4.0570908, dtype=float32)
+  DeviceArray(-4.05709, dtype=float32)
 # ---
 # name: TestDeepSolid.test_walk
   DeviceArray([[[ 3.6101303 ,  0.13946693,  0.82989585,  1.7708621 ,  0.17072193,  0.17384695],
@@ -18,7 +21,7 @@
                 [ 1.987719  , 99.8525    ,  0.8577773 ,  3.0705564 , 99.969315  ,  0.30420953]]],            dtype=float32)
 # ---
 # name: TestDeepSolid.test_wf
-  DeviceArray(0.86030114, dtype=float32)
+  DeviceArray(0.8603, dtype=float32)
 # ---
 # name: TestFermiNet.test_kinetic
   Array(0.2784566, dtype=float32)

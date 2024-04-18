@@ -144,6 +144,21 @@ class TestDeepSolid:
         self.system = system
         self.aux_data = aux_data
 
+    # PySCF resets formatters. So we have to setup formatters again
+    @pytest.fixture(autouse=True)
+    def consistent_jax_print(self, _setup_adaptor):
+        del _setup_adaptor
+
+        def float_round(x):
+            # DeepSolid is numerically more unstable without x64
+            return "0.0" if abs(x) < 1e-5 else str(round(x, 5))
+
+        jnp.set_printoptions(
+            suppress=True,
+            linewidth=100,
+            formatter={"float_kind": float_round},
+        )
+
     def test_wf(self, snapshot):
         logpsi = self.adaptor.call_network(self.params, self.data, self.system)
         assert logpsi == snapshot
@@ -158,7 +173,8 @@ class TestDeepSolid:
         kinetic = self.adaptor.call_local_kinetic_energy(
             self.params, None, self.data, self.system
         )
-        assert kinetic == snapshot
+        assert kinetic.real == snapshot(name="real")
+        assert kinetic.imag == snapshot(name="imag")
 
     def test_walk(self, snapshot):
         # This one is pmapped
