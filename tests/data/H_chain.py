@@ -22,6 +22,7 @@ def get_config():
     cfg = base_config.default()
 
     cfg.network.detnet.hidden_dims = ((32, 4), (32, 4))
+    cfg.network.detnet.distance_type = "tri"
 
     cell = gto.Cell()
     cell.atom = """
