@@ -104,9 +104,7 @@ class FermiNetJAXAdaptor(NetworkAdaptor[MolecularSystem]):
                 )
             )
 
-        self.atoms = atoms = jnp.stack(
-            [jnp.array(atom.coords) for atom in cfg.system.molecule]
-        )
+        atoms = jnp.stack([jnp.array(atom.coords) for atom in cfg.system.molecule])
         charges = jnp.array([atom.charge for atom in cfg.system.molecule])
 
         self.kinetic_energy = make_kinetic_energy(

@@ -58,9 +58,11 @@ class SimpleHydrogen(NetworkAdaptor):
             axis=-1,
         )
 
-        self.atoms = jnp.array([[0.0, 0.0, 0.0]])
         system = MolecularSystem(
-            atoms=self.atoms, charges=jnp.array([1]), spins=(1, 0), ndim=3
+            atoms=jnp.array([[0.0, 0.0, 0.0]]),
+            charges=jnp.array([1]),
+            spins=(1, 0),
+            ndim=3,
         )
         aux_data = HydrogenAuxData(mcmc_width=jnp.array([0.6]))
         return (jnp.array([0]), data, system, aux_data)

@@ -82,7 +82,7 @@ class DeepSolidVMCAdaptor(NetworkAdaptor[SolidSystem]):
         hartree_fock.init_scf()
         klist = hartree_fock.klist
 
-        self.atoms = atoms = simulation_cell.original_cell.atom_coords()
+        atoms = simulation_cell.original_cell.atom_coords()
         charges = simulation_cell.original_cell.atom_charges()
         latvec = jnp.asarray(simulation_cell.original_cell.lattice_vectors())
         self.orig_dist = MinimalImageDistance(latvec)
