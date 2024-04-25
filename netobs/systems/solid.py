@@ -23,6 +23,9 @@ from netobs.systems import System
 
 
 class SolidSystem(System):
+    atoms: jnp.ndarray
+    "(natom, ndim) Positions of the atoms."
+
     charges: jnp.ndarray
     "(natom,) Nuclear charges of the atoms."
 

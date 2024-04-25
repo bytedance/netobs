@@ -18,6 +18,9 @@ from netobs.systems import System
 
 
 class MolecularSystem(System):
+    atoms: jnp.ndarray
+    "(natom, ndim) Positions of the atoms."
+
     charges: jnp.ndarray
     "(natom,) Nuclear charges of the atoms."
 
