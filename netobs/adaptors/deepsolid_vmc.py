@@ -15,7 +15,6 @@
 from __future__ import annotations
 
 from functools import partial
-from pathlib import Path
 from typing import Any, Callable
 
 import DeepSolid.hamiltonian
@@ -29,6 +28,7 @@ from DeepSolid.supercell import get_supercell_copies
 from jax import numpy as jnp
 from jax.tree_util import register_pytree_node_class
 from typing_extensions import TypedDict
+from upath import UPath
 
 from netobs.adaptors import NetworkAdaptor, WalkingStep
 from netobs.helpers.asbl_config import absl_config
@@ -52,13 +52,14 @@ class DeepSolidVMCAdaptor(NetworkAdaptor[SolidSystem]):
         self, ckpt_file: str | None = None, check_shape: bool = True
     ) -> tuple[Any, jnp.ndarray, SolidSystem, DeepSolidVMCAuxData]:
         cfg = self.config
-        restore_path = Path(cfg.log.restore_path)
-        ckpt_filename = (
-            str(restore_path / f"qmcjax_ckpt_{cfg.optim.iterations-1:06d}.npz")
-            if ckpt_file is None
-            else ckpt_file
-        )
-        with open(ckpt_filename, "rb") as f:
+        if ckpt_file is None:
+            ckpt_file_path = (
+                UPath(cfg.log.restore_path)
+                / f"qmcjax_ckpt_{cfg.optim.iterations-1:06d}.npz"
+            )
+        else:
+            ckpt_file_path = UPath(ckpt_file)
+        with ckpt_file_path.open("rb") as f:
             ckpt_data = jnp.load(f, allow_pickle=True)
             data = ckpt_data["data"]
             params = ckpt_data["params"].tolist()

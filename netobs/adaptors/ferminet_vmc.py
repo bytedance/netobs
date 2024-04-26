@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import dataclasses
 from functools import partial
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Literal, cast
 
 import ferminet.constants
@@ -28,6 +27,7 @@ import jax
 from jax import numpy as jnp
 from jax.tree_util import register_pytree_node_class
 from typing_extensions import TypedDict
+from upath import UPath
 
 from netobs.adaptors import NetworkAdaptor, WalkingStep
 from netobs.helpers.asbl_config import absl_config
@@ -87,11 +87,13 @@ class FermiNetJAXAdaptor(NetworkAdaptor[MolecularSystem]):
     ) -> tuple[Any, jnp.ndarray, MolecularSystem, Any]:
         cfg = self.config
         if ckpt_file is None:
-            ckpt_file = str(
-                Path(cfg.log.restore_path)
+            ckpt_file_path = (
+                UPath(cfg.log.restore_path)
                 / f"qmcjax_ckpt_{cfg.optim.iterations-1:06d}.npz"
             )
-        with open(ckpt_file, "rb") as f:
+        else:
+            ckpt_file_path = UPath(ckpt_file)
+        with ckpt_file_path.open("rb") as f:
             ckpt_data = jnp.load(f, allow_pickle=True)
             data = ckpt_data["data"]
             params = ckpt_data["params"].tolist()
@@ -188,11 +190,13 @@ class FermiNetMainAdaptor(NetworkAdaptor):
     ) -> tuple[Any, jnp.ndarray, System, Any]:
         cfg = self.config
         if ckpt_file is None:
-            ckpt_file = str(
-                Path(cfg.log.restore_path)
+            ckpt_file_path = (
+                UPath(cfg.log.restore_path)
                 / f"qmcjax_ckpt_{cfg.optim.iterations-1:06d}.npz"
             )
-        with open(ckpt_file, "rb") as f:
+        else:
+            ckpt_file_path = UPath(ckpt_file)
+        with ckpt_file_path.open("rb") as f:
             ckpt_data = jnp.load(f, allow_pickle=True)
             data = ckpt_data["data"].item()["positions"]
             params = ckpt_data["params"].tolist()

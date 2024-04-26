@@ -14,6 +14,8 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only"
 ]
 dependencies = [
+    "universal_pathlib",
+    "fsspec",
     "omegaconf",
     "jax",
     "jaxlib",

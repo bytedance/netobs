@@ -37,6 +37,8 @@ def test_cli():
             "@force:Bare",
             "--with",
             "steps=1",
+            "--ckpt-mgr",
+            "@:CheckpointManager",
             "--net-restore",
             "tests/data/H_atom.npz",
         ]

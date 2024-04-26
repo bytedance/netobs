@@ -14,13 +14,13 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import Any
 from zipfile import BadZipFile
 
 import jax
 import numpy as np
 from jax import numpy as jnp
+from upath import UPath
 
 from netobs.logging import logger
 
@@ -29,14 +29,14 @@ class CheckpointManager:
     """Base checkpoint manager doing nothing.
 
     Args:
-        restore_path: Path to restore from.
-        save_path: Path to save checkpoints to.
+        restore_path: UPath to restore from.
+        save_path: UPath to save checkpoints to.
     """
 
     def __init__(
         self,
-        restore_path: Path | str = Path("."),
-        save_path: Path | str = Path("."),
+        restore_path: UPath | str = UPath("."),
+        save_path: UPath | str = UPath("."),
     ) -> None:
         del restore_path, save_path
 
@@ -71,7 +71,7 @@ class CheckpointManager:
         state: dict[str, Any],
         aux_data: dict[str, Any],
         metadata: dict,
-    ) -> Path | None:
+    ) -> UPath | None:
         """Save a netobs checkpoint, optionally.
 
         Args:
@@ -95,13 +95,13 @@ class SavingCheckpointManager(CheckpointManager):
 
     def __init__(
         self,
-        restore_path: Path | str = Path("."),
-        save_path: Path | str = Path("."),
+        restore_path: UPath | str = UPath("."),
+        save_path: UPath | str = UPath("."),
     ) -> None:
         super().__init__()
 
-        self.restore_path = Path(restore_path)
-        self.save_path = Path(save_path)
+        self.restore_path = UPath(restore_path)
+        self.save_path = UPath(save_path)
         self.save_path.mkdir(exist_ok=True, parents=True)
 
     def restore(
@@ -119,52 +119,50 @@ class SavingCheckpointManager(CheckpointManager):
         cards = jax.local_device_count()
         for ckpt_file in ckpt_files:
             try:
-                ckpt_content = jnp.load(ckpt_file, allow_pickle=True)
-                # Get required states from archive based on given `state`.
-                state = {k: ckpt_content.get(f"state/{k}", v) for k, v in state.items()}  # type: ignore
-                data = ckpt_content["data"]
-                aux_data = ckpt_content["aux_data"].item()
-                # Automatically reshapes data based on number of devices.
-                if cards != data.shape[0]:
-                    data = data.reshape(cards, -1, data.shape[-1])
-                    aux_data = jax.tree_map(
-                        lambda x: jnp.repeat(x[:1], cards, axis=0), aux_data
-                    )
-                # No restore of values is required
-                if not empty_values:
-                    return (
-                        int(ckpt_content["i"]) + 1,
-                        data,
-                        empty_values,
-                        state,
-                        aux_data,
-                    )
-                # How many steps we have run?
-                first_key = list(empty_values.keys())[0]
-                check_key = "values/" + first_key
-                old_steps_to_run = len(ckpt_content[check_key])
-                old_steps_have_run = int(ckpt_content["i"]) + 1
-                steps = len(empty_values[first_key])
-
-                # Allow equal steps to reexport report
-                if old_steps_have_run > steps:
-                    print("Calculation already done. Assuming re-export")
-                if old_steps_to_run != steps:
-                    steps_to_set = min(steps, old_steps_have_run)  # type: ignore
-                    all_values = {
-                        k: v.at[:steps_to_set].set(
-                            ckpt_content[f"values/{k}"][:steps_to_set]
+                with ckpt_file.open("rb") as f:
+                    ckpt_content = jnp.load(f, allow_pickle=True)
+                    init_step = int(ckpt_content["i"]) + 1
+                    # Get required states from archive based on given `state`.
+                    state = {
+                        k: ckpt_content.get(f"state/{k}", v) for k, v in state.items()
+                    }  # type: ignore
+                    data = ckpt_content["data"]
+                    aux_data = ckpt_content["aux_data"].item()
+                    # Automatically reshapes data based on number of devices.
+                    if cards != data.shape[0]:
+                        data = data.reshape(cards, -1, data.shape[-1])
+                        aux_data = jax.tree_map(
+                            lambda x: jnp.repeat(x[:1], cards, axis=0), aux_data
                         )
-                        for k, v in empty_values.items()
-                    }
+                    # No restore of values is required
+                    if not empty_values:
+                        return (init_step, data, empty_values, state, aux_data)
+                    # How many steps we have run?
+                    first_key = list(empty_values.keys())[0]
+                    check_key = "values/" + first_key
+                    old_steps_to_run = len(ckpt_content[check_key])
+                    old_steps_have_run = int(ckpt_content["i"]) + 1
+                    steps = len(empty_values[first_key])
 
-                else:
-                    all_values = {
-                        k: jnp.array(ckpt_content[f"values/{k}"])
-                        for k in empty_values.keys()
-                    }
+                    # Allow equal steps to reexport report
+                    if old_steps_have_run > steps:
+                        print("Calculation already done. Assuming re-export")
+                    if old_steps_to_run != steps:
+                        steps_to_set = min(steps, old_steps_have_run)  # type: ignore
+                        all_values = {
+                            k: v.at[:steps_to_set].set(
+                                ckpt_content[f"values/{k}"][:steps_to_set]
+                            )
+                            for k, v in empty_values.items()
+                        }
 
-                return (int(ckpt_content["i"]) + 1, data, all_values, state, aux_data)
+                    else:
+                        all_values = {
+                            k: jnp.array(ckpt_content[f"values/{k}"])
+                            for k in empty_values.keys()
+                        }
+
+                    return (init_step, data, all_values, state, aux_data)
             except (OSError, EOFError, BadZipFile):
                 logger.info("Error loading %s. Trying next checkpoint...", ckpt_file)
 
@@ -184,17 +182,18 @@ class SavingCheckpointManager(CheckpointManager):
         state: dict[str, Any],
         aux_data: dict[str, Any],
         metadata: dict,
-    ) -> Path | None:
+    ) -> UPath | None:
         ckpt_path = self.save_path / f"netobs_ckpt_{i:06}.npz"
-        np.savez_compressed(  # compressed npz is only available in numpy
-            ckpt_path,
-            i=i,
-            data=data,
-            metadata=metadata,  # type: ignore
-            aux_data=aux_data,  # type: ignore
-            **{f"digest/{k}": v for k, v in digest.items()},
-            **{f"values/{k}": v for k, v in all_values.items()},
-            **{f"state/{k}": v for k, v in state.items()},
-        )
+        with (ckpt_path).open("wb") as f:
+            np.savez_compressed(  # compressed npz is only available in numpy
+                f,
+                i=i,
+                data=data,
+                metadata=metadata,  # type: ignore
+                aux_data=aux_data,  # type: ignore
+                **{f"digest/{k}": v for k, v in digest.items()},
+                **{f"values/{k}": v for k, v in all_values.items()},
+                **{f"state/{k}": v for k, v in state.items()},
+            )
         logger.info("Saved checkpoint to %s", ckpt_path)
         return ckpt_path

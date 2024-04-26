@@ -33,7 +33,7 @@ from omegaconf import OmegaConf
 from typing_extensions import Self
 
 from netobs.adaptors import NetworkAdaptor
-from netobs.checkpoint import CheckpointManager
+from netobs.checkpoint import CheckpointManager, SavingCheckpointManager
 from netobs.evaluate import evaluate_observable
 from netobs.helpers.importer import import_module_or_file
 from netobs.observables import Estimator
@@ -104,7 +104,7 @@ def make_cli(
         )
         checkpoint_mgr_type: type[CheckpointManager]
         if args.ckpt_mgr is None:
-            checkpoint_mgr_type = CheckpointManager
+            checkpoint_mgr_type = SavingCheckpointManager
         else:
             checkpoint_mgr_type = resolve_object_option(
                 args.ckpt_mgr, expansion["checkpoint"]
