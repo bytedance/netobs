@@ -26,8 +26,9 @@ netobs @ferminet_vmc li2:5.051 @force:SWCT \
 from __future__ import annotations
 
 import argparse
-from typing import Any, TypedDict
+from typing import Any, TypedDict, overload
 
+from importlib_metadata import entry_points
 from jax.config import config as jax_config
 from omegaconf import OmegaConf
 from typing_extensions import Self
@@ -42,15 +43,23 @@ from netobs.options import NetObsOptions
 
 class Expansion(TypedDict):
     estimator: dict[str, str]
-    checkpoint: dict[str, str]
+    ckpt_mgr: dict[str, str]
     adaptor: dict[str, str]
+    ckpt: dict[str, str]
+    config: dict[str, str]
 
 
-DEFAULT_EXPANSION: Expansion = {
+EXPANSION: Expansion = {
     "estimator": {"@": "netobs.observables."},
-    "checkpoint": {"@": "netobs.checkpoint"},
+    "ckpt_mgr": {"@": "netobs.checkpoint"},
     "adaptor": {"@": "netobs.adaptors."},
+    "config": {},
+    "ckpt": {},
 }
+for expansion_entry in entry_points(group="netobs.cli.expansions"):
+    expansion_patches = expansion_entry.load()
+    for name in EXPANSION:
+        EXPANSION[name].update(expansion_patches.get(name, {}))  # type: ignore
 
 
 class Arguments(argparse.Namespace):
@@ -78,50 +87,38 @@ class Arguments(argparse.Namespace):
         parser.add_argument("--ckpt-to", default=None, help="Checkpoint to save")
         parser.add_argument("--net-restore", default=None, help="Network checkpoint")
         parser.add_argument("--with", dest="opt", nargs="*", help="NetOBS options")
+        for argument_entry in entry_points(group="netobs.cli.arguments"):
+            add_argument = argument_entry.load()
+            add_argument(parser)
         return parser
 
     def parse(self, argv: list[str] | None = None) -> tuple[Self, list[str]]:
         args, rest_args = self.parser.parse_known_args(argv, namespace=self)
         if args.ckpt_from is None and args.ckpt_to is None:
             args.ckpt_from = args.ckpt_to = args.ckpt
+        for argument_entry in entry_points(group="netobs.cli.parse"):
+            parse_argument = argument_entry.load()
+            parse_argument(args, rest_args)
         return args, rest_args
 
 
-def make_cli(
-    arg_type: type[Arguments] = Arguments,
-    # checkpoint_manager: type[CheckpointManager] | None = None,
-    expansion: Expansion = DEFAULT_EXPANSION,
-):
-    def cli(argv: list[str] | None = None) -> None:
-        args, rest_args = arg_type().parse(argv)
-        if args.x64:
-            jax_config.update("jax_enable_x64", True)
-        adaptor_type: type[NetworkAdaptor] = resolve_object_option(
-            args.adaptor, expansion["adaptor"]
-        )
-        estimator_type: type[Estimator] = resolve_object_option(
-            args.estimator, expansion["estimator"]
-        )
-        checkpoint_mgr_type: type[CheckpointManager]
-        if args.ckpt_mgr is None:
-            checkpoint_mgr_type = SavingCheckpointManager
-        else:
-            checkpoint_mgr_type = resolve_object_option(
-                args.ckpt_mgr, expansion["checkpoint"]
-            )
+@overload
+def expand_option(name: str, expansion: dict[str, str]) -> str:
+    ...
 
-        force_options = OmegaConf.structured(
-            NetObsOptions(network_restore=args.net_restore)
-        )
-        force_options = OmegaConf.merge(force_options, OmegaConf.from_dotlist(args.opt))
-        evaluate_observable(
-            adaptor_type(args.config, rest_args),
-            estimator_type,
-            options=NetObsOptions(**force_options),
-            checkpoint_mgr=checkpoint_mgr_type(args.ckpt_from, args.ckpt_to),
-        )
 
-    return cli
+@overload
+def expand_option(name: None, expansion: dict[str, str]) -> None:
+    ...
+
+
+def expand_option(name: str | None, expansion: dict[str, str]) -> str | None:
+    if name is None:
+        return None
+    for notation, replace in expansion.items():
+        if name.startswith(notation):
+            return replace + name[len(notation) :]
+    return name
 
 
 def resolve_object_option(name: str, expansion: dict[str, str]) -> Any:
@@ -131,9 +128,7 @@ def resolve_object_option(name: str, expansion: dict[str, str]) -> Any:
     - "module": resolve default object
     - "module:name": resolve `module.name`
     """
-    for notation, replace in expansion.items():
-        if name.startswith(notation):
-            name = replace + name[len(notation) :]
+    name = expand_option(name, expansion)
 
     colon_count = name.count(":")
     if colon_count == 0:
@@ -147,3 +142,38 @@ def resolve_object_option(name: str, expansion: dict[str, str]) -> Any:
     if obj is None:
         raise ValueError("Estimator not found")
     return obj
+
+
+def cli(argv: list[str] | None = None) -> None:
+    args, rest_args = Arguments().parse(argv)
+    if args.x64:
+        jax_config.update("jax_enable_x64", True)
+    adaptor_type: type[NetworkAdaptor] = resolve_object_option(
+        args.adaptor, EXPANSION["adaptor"]
+    )
+    estimator_type: type[Estimator] = resolve_object_option(
+        args.estimator, EXPANSION["estimator"]
+    )
+    checkpoint_mgr_type: type[CheckpointManager]
+    if args.ckpt_mgr is None:
+        checkpoint_mgr_type = SavingCheckpointManager
+    else:
+        checkpoint_mgr_type = resolve_object_option(
+            args.ckpt_mgr, EXPANSION["ckpt_mgr"]
+        )
+
+    force_options = OmegaConf.structured(
+        NetObsOptions(
+            network_restore=expand_option(args.net_restore, EXPANSION["ckpt"])
+        )
+    )
+    force_options = OmegaConf.merge(force_options, OmegaConf.from_dotlist(args.opt))
+    evaluate_observable(
+        adaptor_type(expand_option(args.config, EXPANSION["config"]), rest_args),
+        estimator_type,
+        options=NetObsOptions(**force_options),
+        checkpoint_mgr=checkpoint_mgr_type(
+            expand_option(args.ckpt_from, EXPANSION["ckpt"]),
+            expand_option(args.ckpt_to, EXPANSION["ckpt"]),
+        ),
+    )
