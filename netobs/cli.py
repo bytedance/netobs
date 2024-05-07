@@ -157,6 +157,8 @@ def cli(argv: list[str] | None = None) -> None:
     checkpoint_mgr_type: type[CheckpointManager]
     if args.ckpt_mgr is None:
         checkpoint_mgr_type = SavingCheckpointManager
+    elif args.ckpt_mgr == "no":
+        checkpoint_mgr_type = CheckpointManager
     else:
         checkpoint_mgr_type = resolve_object_option(
             args.ckpt_mgr, EXPANSION["ckpt_mgr"]
