@@ -52,6 +52,9 @@ def chunk_vmap(func: F, in_axes: Sequence[None | int], chunks: int | str | None)
             return None, vmapped_func(*args[:argnum], x, *args[argnum + 1 :])
 
         result = jax.lax.scan(func_per_chunk, None, data)[1]
-        return jnp.reshape(result, (-1, *result.shape[2:]))
+        if isinstance(result, tuple):
+            return tuple(jnp.reshape(r, (-1, *r.shape[2:])) for r in result)
+        else:
+            return jnp.reshape(result, (-1, *result.shape[2:]))
 
     return cast(F, chunked_func)
