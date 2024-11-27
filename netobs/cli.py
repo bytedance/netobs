@@ -29,7 +29,11 @@ import argparse
 from typing import Any, TypedDict, overload
 
 from importlib_metadata import entry_points
-from jax.config import config as jax_config
+try:
+    from jax.config import config as jax_config
+except ImportError:
+    import jax
+    jax_config = jax.config
 from omegaconf import OmegaConf
 from typing_extensions import Self
 
