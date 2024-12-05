@@ -47,6 +47,9 @@ class NetObsOptions:
     save_interval: int = 600
     "Time interval in seconds between saves."
 
+    check_nan: bool = False
+    "Check if there are NaN values and stop."
+
     network_restore: Any = None
     """The restore option for the network adaptor.
     Defaults to None, which means the network adaptor has a fixed and known way to

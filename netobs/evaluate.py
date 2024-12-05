@@ -138,6 +138,8 @@ def evaluate_observable(
             i, params, subkeys, data, system, state, aux_data
         )
 
+        has_nan = any(jnp.isnan(v).any() for v in obs_values.values())
+
         if options.reweight_ratio > 0.0:
             log_psi = pmap_log_psi(params, data, system)
             weights = jnp.minimum(
@@ -146,11 +148,9 @@ def evaluate_observable(
             mean_obs_values = {
                 k: weighted_sum(v, weights) for k, v in obs_values.items()
             }
-            mean_obs_values["reweighting_weights"] = jnp.mean(weights)
+            mean_obs_values["reweighting_weights"] = jnp.nanmean(weights)
         else:
-            mean_obs_values = {k: jnp.mean(v, (0, 1)) for k, v in obs_values.items()}
-
-        has_nan = any(jnp.isnan(v).any() for v in mean_obs_values.values())
+            mean_obs_values = {k: jnp.nanmean(v, (0, 1)) for k, v in obs_values.items()}
 
         all_values = {k: v.at[i].set(mean_obs_values[k]) for k, v in all_values.items()}
 
@@ -161,7 +161,7 @@ def evaluate_observable(
         should_log = last_log < now - options.log_interval
         should_save = last_save < now - options.save_interval
 
-        if has_nan or should_save or should_log:
+        if options.check_nan and has_nan or should_save or should_log:
             all_values_yet = {k: v[: i + 1] for k, v in all_values.items()}
 
             if options.reweight_ratio > 0.0:
@@ -171,7 +171,7 @@ def evaluate_observable(
                 }
             digest = estimator.digest(all_values_yet, state)
 
-            if has_nan or should_save:
+            if options.check_nan and has_nan or should_save:
                 last_save = now
                 checkpoint_mgr.save(
                     i, data, digest, all_values, state, aux_data, metadata
@@ -181,7 +181,7 @@ def evaluate_observable(
             logger.info("Loop %s", i)
             log_digest(i, digest)
 
-            if has_nan:
+            if options.check_nan and has_nan:
                 logger.error("NaN detected. Stopping")
                 return digest, all_values, state
 
