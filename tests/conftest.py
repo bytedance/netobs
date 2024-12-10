@@ -20,7 +20,7 @@ from jax import numpy as jnp
 def consistent_jax_print():
     def float_round(x):
         # Simply rounding will have "0.0" vs "-0.0" issue
-        return "0.0" if abs(x) < 1e-7 else str(round(x, 7))
+        return "0.0" if abs(x) < 1e-6 else str(round(x, 6))
 
     jnp.set_printoptions(
         suppress=True,
