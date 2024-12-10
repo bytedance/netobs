@@ -13,16 +13,16 @@ jobs:
           path: netobs
       - uses: actions/checkout@v4
         with:
-          repository: AllanChain/deepsolid
-          ref: update-with-force
+          repository: bytedance/deepsolid
+          ref: b1abaf5212e1bfe1ce01257a81bc63b820efc4d4
           path: deepsolid
       - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
       - name: Install
         run: |
-          pip install -e deepsolid scipy==1.8.0
           pip install 'jax[cpu]'==0.2.26 -f https://storage.googleapis.com/jax-releases/jax_releases.html
+          pip install -e deepsolid opt_einsum==3.3.0
           pip install -e 'netobs[dev]'
       - name: Test
         working-directory: netobs
@@ -36,14 +36,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: google-deepmind/ferminet
+          ref: 9a1deec8222c1838c5aafb65830fc41372c48677
           path: ferminet
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
       - name: Install
         run: |
+          pip install jax==0.4.35
           pip install -e ferminet
-          pip install 'jax[cpu]'==0.4.24 -f https://storage.googleapis.com/jax-releases/jax_releases.html
           pip install -e 'netobs[dev]'
       - name: Test
         working-directory: netobs

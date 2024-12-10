@@ -14,7 +14,7 @@
 
 import pytest
 
-from netobs.cli import make_cli
+from netobs.cli import cli
 
 try:
     from netobs.adaptors.ferminet_vmc import FERMINET_VERSION
@@ -29,7 +29,6 @@ except ImportError:
     reason="FermiNet main is required to test it",
 )
 def test_cli():
-    cli = make_cli()
     cli(
         [
             "@ferminet_vmc",
