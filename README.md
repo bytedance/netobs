@@ -15,7 +15,7 @@ pip install -e .
 ```
 
 Please don't forget to install the NN-VMC code and the corresponding version of JAX beforehand.
-NetObs is tested with [`google-deepmind/ferminet@e94435b`](https://github.com/google-deepmind/ferminet/commit/e94435b15ca73a6c5404cdd399916290990e340b)+`jax@0.4.24` and [`bytedance/DeepSolid`](https://github.com/bytedance/DeepSolid/)+`jax@0.2.26`.
+NetObs is tested with [`google-deepmind/ferminet@9a1deec`](https://github.com/google-deepmind/ferminet/commit/9a1deec8222c1838c5aafb65830fc41372c48677)+`jax@0.4.35` and [`bytedance/DeepSolid`](https://github.com/bytedance/DeepSolid/)+`jax@0.2.26`. For more details, you can refer to our [CI config](.github/workflows/test.yml).
 
 ## Command Line Example
 
