@@ -36,14 +36,14 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: google-deepmind/ferminet
-          ref: 9a1deec8222c1838c5aafb65830fc41372c48677
+          ref: c6f9db52fbb15cee01fd83c958230d27d61bfe70
           path: ferminet
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install
         run: |
-          pip install jax==0.4.35
+          pip install jax==0.4.38
           pip install -e ferminet
           pip install -e 'netobs[dev]'
       - name: Test
